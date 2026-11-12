@@ -280,3 +280,21 @@ footer a{color:var(--side)}
 .banplans li em{font-style:normal;font:500 10px var(--f-mono);color:var(--warn);background:var(--warn-bg);padding:2px 5px;border-radius:2px;margin-left:6px;text-transform:uppercase;letter-spacing:.05em}
 .banplans li.likely{border-color:color-mix(in srgb,var(--warn) 50%,var(--line))}
 .banplans li.on{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 10%,var(--bg2))}
+
+/* Phase de ban */
+.banbox .bangroup{padding:8px 0;border-top:1px dashed var(--line)}
+.banbox .bangroup:first-of-type{border-top:0;padding-top:0}
+.bh{font-weight:600;font-size:14px;margin-bottom:6px}
+.bh b{font:500 12px var(--f-mono);color:var(--muted);margin-left:6px}
+.banrow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:6px}
+.banrow .bl{width:86px;margin:0}
+.banbtn{font:600 13px/1 var(--f-body);padding:7px 10px;min-height:34px;border-radius:3px;border:1px solid currentColor;background:transparent;cursor:pointer}
+.banbtn.d{color:var(--def)} .banbtn.a{color:var(--atk)}
+.banbtn.on{background:currentColor}
+.banbtn.on.d,.banbtn.on.a{color:var(--bg)}
+.banbtn.on.d{background:var(--def)} .banbtn.on.a{background:var(--atk)}
+.banbtn.on{text-decoration:line-through;text-decoration-thickness:2px}
+.banbtn.dis{opacity:.4}
+.banwarn{font-size:13px;color:var(--warn);background:var(--warn-bg);padding:7px 9px;border-radius:4px;margin:4px 0 0}
+.worst{font-size:13px;margin:8px 0 0;padding-top:8px;border-top:1px dashed var(--line);color:var(--muted)}
+.worst b{color:var(--ink)} .worst u{color:var(--warn);text-decoration:none;font-weight:700}

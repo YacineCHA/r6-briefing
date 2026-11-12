@@ -24,7 +24,7 @@ const cleanName = (s) => String(s || "").replace(/[\u0000-\u001f]/g, "").trim().
 
 const st = {
   side: ls.get("r6-side", "atk") === "def" ? "def" : "atk",
-  lang: ls.get("r6-lang", "fr") === "en" ? "en" : "fr", q: "", open: null, sel: {}, banned: {}, shift: 0, floor: {}, mode: ls.get("r6-mode", "3d") === "plan" ? "plan" : "3d",
+  lang: ls.get("r6-lang", "fr") === "en" ? "en" : "fr", q: "", open: null, sel: {}, bans: {}, shift: 0, floor: {}, mode: ls.get("r6-mode", "3d") === "plan" ? "plan" : "3d",
   roster: [], mine: ls.get("r6-mine", []), live: false
 };
 
@@ -210,6 +210,17 @@ function closeMap() {
 dlg.addEventListener("close", () => { if (st.open) { st.open = null; history.replaceState(null, "", location.pathname + location.search); } });
 dlg.addEventListener("click", (e) => { if (e.target === dlg) closeMap(); });
 
+// Bans du match : 3 pour nous, 3 pour eux. Un opérateur banni l'est pour les deux équipes.
+const MAXBAN = 3;
+const bansOf = (m) => (st.bans[m.id] = st.bans[m.id] || { us: [], them: [] });
+const banList = (m) => [...new Set([...bansOf(m).us, ...bansOf(m).them])];
+function toggleBan(m, who, o) {
+  const b = bansOf(m), L = b[who];
+  if (L.includes(o)) b[who] = L.filter((x) => x !== o);
+  else if (L.length >= MAXBAN) { toast((who === "us" ? "Nous avons" : "Ils ont") + " déjà 3 bans : retire-en un d'abord."); return; }
+  else b[who] = [...L, o];
+}
+
 function swapFor(op, comp, banned) {
   return (SWAPS[op] || []).find((o) => !comp.includes(o) && !banned.includes(o)) || null;
 }
@@ -217,7 +228,7 @@ function swapFor(op, comp, banned) {
 function composition(m, s, sel) {
   const fc = finalComp(m, sel);
   const comp = st.side === "atk" ? s.a : s.d;
-  const banned = st.banned[m.id] || [];
+  const banned = banList(m);
   const final = comp.map((o) => banned.includes(o) ? { o, ban: true, rep: swapFor(o, comp, banned) } : { o });
   const ps = players();
   const n = ps.length;
@@ -229,7 +240,7 @@ function composition(m, s, sel) {
     const name = x.ban ? `<s>${esc(x.o)}</s> → ${esc(x.rep || "au choix")}` : esc(x.o);
     const role = ROLE[x.ban ? x.rep : x.o] || ROLE[x.o] || "";
     const room = fc[i] && fc[i].room ? `<span class="room">→ ${esc(rn(m, fc[i].room))}</span>` : "";
-    return `<li class="${extra ? "extra" : ""}" style="--i:${i}">${who}<button class="opbtn ${x.ban ? "banned" : ""}" data-ban="${esc(x.o)}" title="Marquer comme banni par l'adversaire">${name}<small>${esc(role)}</small></button>${room}</li>`;
+    return `<li class="${extra ? "extra" : ""}" style="--i:${i}">${who}<button class="opbtn ${x.ban ? "banned" : ""}" data-ban="${esc(x.o)}" title="Marquer comme banni par l'adversaire (leurs 3 bans)">${name}<small>${esc(role)}</small></button>${room}</li>`;
   }).join("");
   const tipN = Math.max(1, Math.min(n || MAX, MAX));
   return { rows, tip: SQUAD_TIPS[tipN][st.side], n };
@@ -293,7 +304,7 @@ function findRoom(m, name, pref) {
 }
 // Compo finale (avec remplaçants des bannis) et pièce de départ de chacun.
 function finalComp(m, sel) {
-  const s = m.sites[sel], comp = st.side === "atk" ? s.a : s.d, banned = st.banned[m.id] || [];
+  const s = m.sites[sel], comp = st.side === "atk" ? s.a : s.d, banned = banList(m);
   const plan = stratOf(m, sel), rooms = plan ? (st.side === "atk" ? plan.A : plan.D) : [];
   return comp.map((o, i) => {
     const ban = banned.includes(o), rep = ban ? swapFor(o, comp, banned) : null;
@@ -314,13 +325,33 @@ function markers(m, sel, floor, small) {
 }
 function banPlans(m, sel) {
   const plan = stratOf(m, sel); if (!plan) return "";
-  const s = m.sites[sel], comp = st.side === "atk" ? s.a : s.d, banned = st.banned[m.id] || [];
+  const s = m.sites[sel], comp = st.side === "atk" ? s.a : s.d, banned = banList(m);
   const likely = st.side === "atk" ? m.ba : m.bd;
   const fill = (o) => (BAN_PLANS[o] || "Sans {o} : {r} prend son rôle.").replace("{o}", o)
-    .replace("{r}", (SWAPS[o] || []).filter((x) => !comp.includes(x)).slice(0, 2).join(" ou ") || "un autre opérateur du même rôle")
+    .replace("{r}", (SWAPS[o] || []).filter((x) => !comp.includes(x) && !banned.includes(x)).slice(0, 2).join(" ou ") || "un autre opérateur du même rôle")
     .replace("{w}", tx(m, plan.w)).replace("{e}", tx(m, plan.e)).replace("{alt}", tx(m, plan.alt));
   const ordered = [...comp.filter((o) => likely.includes(o) || banned.includes(o)), ...comp.filter((o) => !likely.includes(o) && !banned.includes(o))];
   return ordered.map((o) => `<li class="${banned.includes(o) ? "on" : likely.includes(o) ? "likely" : ""}"><b>${esc(o)}${likely.includes(o) ? " <em>souvent banni</em>" : ""}</b>${esc(fill(o))}</li>`).join("");
+}
+
+function banPhase(m, sel) {
+  const b = bansOf(m), all = banList(m), s = m.sites[sel];
+  const ours = new Set(m.sites.flatMap((x) => [...x.a, ...x.d]));
+  const btn = (who, o, cls) => `<button class="banbtn ${cls}${b[who].includes(o) ? " on" : ""}${who === "them" && b.us.includes(o) ? " dis" : ""}" data-bwho="${who}" data-op="${esc(o)}">${esc(o)}</button>`;
+  const row = (who) => `<div class="banrow"><span class="bl">Défenseurs</span>${m.bd.map((o) => btn(who, o, "d")).join("")}</div><div class="banrow"><span class="bl">Attaquants</span>${m.ba.map((o) => btn(who, o, "a")).join("")}</div>`;
+  const warn = b.us.filter((o) => ours.has(o));
+  // Pire cas : l'adversaire banne les 3 opérateurs les plus bannis de notre compo.
+  const comp = st.side === "atk" ? s.a : s.d, likely = [...m.ba, ...m.bd].filter((o) => comp.includes(o)).slice(0, 3);
+  const gone = [...new Set([...likely, ...all])];
+  const worst = comp.map((o) => gone.includes(o) ? (swapFor(o, comp, gone) || "?") : o);
+  return `<div class="box banbox">
+    <h4>Phase de ban · ${all.length} / 6</h4>
+    <div class="bangroup"><div class="bh">Nos bans <b>${b.us.length} / 3</b></div>${row("us")}
+      ${warn.length ? `<p class="banwarn">Attention : ${esc(warn.join(", "))} ${warn.length > 1 ? "font" : "fait"} partie de nos compos sur cette map. Un ban vaut pour les deux équipes, on ${warn.length > 1 ? "les" : "le"} perd aussi.</p>` : ""}</div>
+    <div class="bangroup"><div class="bh">Leurs bans <b>${b.them.length} / 3</b></div>${row("them")}
+      <p class="helper">Ou touche un opérateur dans la compo pour le marquer banni.</p></div>
+    ${likely.length ? `<p class="worst"><b>Pire cas</b> (ils bannissent ${esc(likely.join(", "))}) : ${worst.map((o, i) => gone.includes(comp[i]) ? `<u>${esc(o)}</u>` : esc(o)).join(" · ")}</p>` : ""}
+  </div>`;
 }
 
 // Image du plan Ubisoft recadrée sur la zone utile (vb = x, y, largeur, hauteur dans l'image 1600x900).
@@ -413,11 +444,12 @@ function renderDialog() {
           <p class="helper">Touche un opérateur s'il est banni : le site propose un remplaçant.</p>
           <div class="row-actions">
             ${c.n > 1 ? '<button class="btn ghost" id="shuffle">Échanger les rôles</button>' : ""}
-            ${(st.banned[m.id] || []).length ? '<button class="btn ghost" id="unban">Annuler les bans</button>' : ""}
+            ${banList(m).length ? '<button class="btn ghost" id="unban">Annuler les bans</button>' : ""}
           </div>
         </div>
       </div>
       <div>
+        ${banPhase(m, sel)}
         <div class="box">
           <h4>Strat ${sideLbl.toLowerCase()} · ${esc(siteName(m, sel))}</h4>
           ${plan ? `<p class="key">${st.side === "atk" ? "Mur à ouvrir" : "Mur à tenir"} : <b>${esc(tx(m, plan.w))}</b>. Approche de l'attaque : ${esc(tx(m, plan.e))}.</p>
@@ -428,13 +460,7 @@ function renderDialog() {
           <h4>Si l'adversaire banne un de nos opérateurs</h4>
           <ul class="banplans">${banPlans(m, sel)}</ul>
         </div>` : ""}
-        <div class="box">
-          <h4>Bans · ${sideLbl}</h4>
-          <div class="bans2">
-            <div><div class="bl">${st.side === "atk" ? "On bannit (défenseur)" : "On bannit (attaquant)"}</div><div class="ops">${ops(st.side === "atk" ? m.bd : m.ba, st.side === "atk" ? "d" : "a", "ban")}</div></div>
-            <div><div class="bl">Eux risquent de bannir</div><div class="ops">${ops(st.side === "atk" ? m.ba : m.bd, st.side === "atk" ? "a" : "d")}</div></div>
-          </div>
-        </div>
+
       </div>
     </div>`;
   bindStage();
@@ -448,7 +474,8 @@ $("dlg-inner").addEventListener("click", (e) => {
   if (e.target.closest("#close")) return closeMap();
   const ds = e.target.closest("[data-dside]"); if (ds) return setSide(ds.dataset.dside);
   if (e.target.closest("#shuffle")) { st.shift++; return renderDialog(); }
-  if (e.target.closest("#unban")) { st.banned[m.id] = []; return renderDialog(); }
+  if (e.target.closest("#unban")) { st.bans[m.id] = { us: [], them: [] }; return renderDialog(); }
+  const bb = e.target.closest("[data-bwho]"); if (bb) { toggleBan(m, bb.dataset.bwho, bb.dataset.op); return renderDialog(); }
   const lg = e.target.closest("[data-lang]"); if (lg) { st.lang = lg.dataset.lang; ls.set("r6-lang", st.lang); return renderDialog(); }
   const md = e.target.closest("[data-mode]"); if (md) { st.mode = md.dataset.mode; ls.set("r6-mode", st.mode); return renderDialog(); }
   const fl = e.target.closest("[data-floor]");
@@ -457,8 +484,8 @@ $("dlg-inner").addEventListener("click", (e) => {
   if (site) { st.sel[m.id] = +site.dataset.site; st.floor[m.id] = m.sites[+site.dataset.site].f; return renderDialog(); }
   const b = e.target.closest("[data-ban]");
   if (b) {
-    const list = st.banned[m.id] || [], o = b.dataset.ban;
-    st.banned[m.id] = list.includes(o) ? list.filter((x) => x !== o) : [...list, o];
+    const o = b.dataset.ban;
+    if (bansOf(m).us.includes(o)) bansOf(m).us = bansOf(m).us.filter((x) => x !== o); else toggleBan(m, "them", o);
     renderDialog();
   }
 });
