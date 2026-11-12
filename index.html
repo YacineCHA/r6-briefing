@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Briefing R6</title>
+<meta name="description" content="Maps ranked de Rainbow Six Siege : bans, compos et strats adaptées au nombre de joueurs de l'équipe.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2 29 9v14L16 30 3 23V9z' fill='%23F2905F'/%3E%3Cpath d='M16 9 23 13v7l-7 4-7-4v-7z' fill='%230B141A'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="kicker"><b id="season"></b><span id="season-name"></span></div>
+    <h1>Briefing <span>R6</span></h1>
+    <p class="lede">Inscris-toi, choisis ton camp, ouvre une map : le site te donne les <strong>bans</strong>, la <strong>compo</strong> et la <strong>strat</strong> adaptées au nombre de joueurs présents.</p>
+  </header>
+
+  <section class="squad" id="squad" aria-labelledby="squad-title">
+    <div class="squad-count" aria-live="polite">
+      <span class="big" id="count">0</span>
+      <span class="of">/ 5</span>
+    </div>
+    <div class="squad-main">
+      <h2 id="squad-title">Qui joue ce soir ?</h2>
+      <form class="join" id="join">
+        <input id="pseudo" maxlength="16" autocomplete="nickname" placeholder="Ton pseudo" aria-label="Ton pseudo" required>
+        <button type="submit" class="btn primary" id="join-btn">Je joue</button>
+      </form>
+      <ul class="roster" id="roster" aria-label="Joueurs inscrits"></ul>
+      <div class="squad-foot">
+        <span class="sync" id="sync"></span>
+        <button class="btn ghost" id="share" hidden>Copier le lien de l'équipe</button>
+        <button class="btn ghost" id="reset">Vider la liste</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="bar" role="region" aria-label="Filtres">
+    <div class="seg" role="group" aria-label="Camp">
+      <button class="a" data-side="atk" aria-pressed="true">Attaque</button>
+      <button class="d" data-side="def" aria-pressed="false">Défense</button>
+    </div>
+    <input class="search" id="q" type="search" placeholder="Chercher une map ou une salle" aria-label="Chercher une map ou une salle">
+    <span class="mapcount" id="mapcount"></span>
+  </div>
+
+  <main class="grid" id="grid"></main>
+
+  <footer>
+    Données : saison <span id="season2"></span>, synthèse de la méta (bans et compos) et noms de sites vérifiés sauf mention « à vérifier ».
+    Les schémas en 3D montrent les étages et les sites, ce ne sont pas les vrais plans : utilise les liens Ubisoft et r6calls pour ça.
+  </footer>
+</div>
+
+<dialog id="dlg" aria-labelledby="dlg-title">
+  <div class="dlg-inner" id="dlg-inner"></div>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
