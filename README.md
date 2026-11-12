@@ -43,8 +43,18 @@ Ces clés Firebase sont faites pour être publiques ; les règles ci-dessus limi
 Tout le contenu (maps, sites, bans, compos, strats, conseils par nombre de joueurs) est dans `data.js`.
 Les compos sont classées par priorité : avec 3 joueurs, le site donne les 3 premiers opérateurs à l'équipe et propose les autres aux randoms.
 
+## Pièces des maps
+
+`rooms.js` contient toutes les pièces de chaque étage (nom, position sur le plan, nom français quand il existe). Il est généré à partir de :
+- [SiteRep](https://siterep.gg) : 12 maps à jour (noms du projet communautaire R6Calls, placés sur les plans officiels Ubisoft) ;
+- [R6Maps](https://github.com/capajon/r6maps) (licence MIT, voir `LICENSE-R6Maps.txt`) : Kanal (plan d'avant le rework de juin 2026) et les noms français ;
+- [siegestrats](https://siegestrats.com) : Villa (noms seulement, étages à vérifier).
+
+Dans `data.js`, `SITE_ROOMS` indique quelles pièces forment chaque site (elles s'allument sur le plan).
+
 ## Fichiers
 
 - `index.html`, `style.css`, `app.js` : le site
-- `data.js` : le contenu
+- `data.js` : le contenu (bans, compos, strats)
+- `rooms.js` : les pièces de chaque étage
 - `firebase-config.js` : la connexion à la base (facultatif)

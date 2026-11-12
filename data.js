@@ -12,7 +12,7 @@ export const SEASON = { code: "Y11S3", name: "Operation Split Fire" };
 export const MAPS = [
 { id: "villa", name: "Villa", fr: "Villa", ubi: "villa",
   bd: ["Mira", "Azami"], ba: ["Ace", "Thatcher"],
-  chk: "Split Fire a déplacé l'ancien objectif Living / Library au sous-sol. Le nom exact de ce site n'est pas confirmé : regarde les marqueurs en partie perso.",
+  chk: "Pièces sans position (pas de plan à jour disponible), étages à vérifier. Split Fire a déplacé l'ancien objectif Living / Library au sous-sol. Le nom exact de ce site n'est pas confirmé : regarde les marqueurs en partie perso.",
   blurb: "Garage devenu intérieur et un objectif passé au sous-sol depuis la mise à jour de Split Fire.",
   atk: ["Draine les roamers tôt : la villa a beaucoup d'accès extérieurs (garage, terrasses, fenêtres).", "Aux étages, prends le contrôle vertical depuis le 2F pour frapper Kitchen / Dining par le plafond.", "Au sous-sol, une seule vraie équipe d'ouverture : hard breach couvert par Thatcher, le reste tient les escaliers."],
   def: ["Ne laisse pas l'attaque prendre le 2F gratuitement : un joueur en Aviator ou Games Room ralentit tout.", "Au sous-sol, renforce les murs donnant sur le nouveau garage intérieur.", "Mira ou Azami pour créer des angles croisés sur les accès principaux."],
@@ -67,14 +67,14 @@ export const MAPS = [
     S("B", "Wine Cellar / Snowmobile Garage", RBa, RBd)] },
 { id: "kafe", name: "Kafe Dostoyevsky", fr: "Kafe Dostoïevski", ubi: "kafe-dostoyevsky",
   bd: ["Kaid", "Mira"], ba: ["Ace", "Thatcher"],
-  chk: "Sites tirés d'un guide de 2019 ; la map a été modernisée en juin 2025. Le niveau exact de la cuisine diffère selon les sources.",
+  chk: "Paires de sites tirées d'un guide de 2019 ; la map a été modernisée en juin 2025.",
   blurb: "Map énorme et très destructible : le jeu vertical et les trappes décident.",
   atk: ["3F : entre par le toit et joue en hauteur, c'est le site le plus exposé.", "2F : ouvre les planchers depuis le 3F pour couper les défenseurs.", "Cuisine : prends le contrôle de la rue et entre par Kitchen Service."],
   def: ["Ne laisse pas l'attaque prendre le 3F gratuitement si tu défends le 2F.", "Les planchers sont fragiles : change souvent de position.", "Un roamer au 3F ou sur les escaliers principaux retarde beaucoup."],
   sites: [S("3F", "Cocktail Lounge / Cigar Lounge", R1a, R1d),
     S("2F", "Reading Room / Fireplace Hall", R2a, R2d),
     S("2F", "Fireplace Hall / Mining Room", R3a, R3d),
-    S("B", "Kitchen Service / Kitchen Cooking", RBa, "Kaid, Bandit, Smoke, Jäger, Valkyrie", "Niveau à confirmer")] },
+    S("1F", "Kitchen Service / Kitchen Cooking", RBa, "Kaid, Bandit, Smoke, Jäger, Valkyrie")] },
 { id: "border", name: "Border", fr: "Frontière", ubi: "border",
   bd: ["Mira", "Azami"], ba: ["Ace", "Jackal"],
   blurb: "Map très destructible et ouverte. Mira et Azami changent les lignes de vue ; Jackal punit les roamers sur des espaces dégagés.",
@@ -132,7 +132,7 @@ export const MAPS = [
     S("B", "Laundry / Supply", RBa, RBd)] },
 { id: "kanal", name: "Kanal", fr: "Canal", ubi: "kanal",
   bd: ["Mira", "Azami"], ba: ["Ace", "Thatcher"],
-  chk: "Paires de sites de 2019, avant le rework de juin 2026 : à vérifier en jeu.",
+  chk: "Paires de sites et plan des pièces d'avant le rework de juin 2026 : à vérifier en jeu.",
   blurb: "Map de bâtiments reliés par des ponts : le contrôle des passages entre bâtiments décide.",
   atk: ["Contrôle les ponts : ce sont les seules liaisons entre bâtiments.", "Ne traverse pas à découvert : fume et drone avant de passer.", "Sous-sol : Ram ou hard breach sur le mur principal."],
   def: ["Ne te sépare pas trop entre bâtiments, les rotations sont longues.", "Un défenseur près des ponts ralentit les rotations de l'attaque.", "Mira ou Azami pour fermer les angles exposés."],
@@ -171,4 +171,22 @@ export const SQUAD_TIPS = {
   3: { atk: "À 3 : ouverture, anti-gadgets et un entrée. Une seule entrée sur le site, l'un tient le flanc.", def: "À 3 : deux ancres sur le site, un joueur flexible qui renforce et tourne. Pas de roam lointain." },
   4: { atk: "À 4 : compo presque complète. Le random prend le dernier rôle, propose-le dans le chat.", def: "À 4 : trois sur le site, un roamer proche. Le random complète avec le dernier opérateur." },
   5: { atk: "Équipe complète : compo entière, un joueur garde les flancs pendant l'exécution.", def: "Équipe complète : trois ancres, deux roamers qui retardent puis reviennent." }
+};
+
+// Pièces du plan qui forment chaque site (dans l'ordre des sites de chaque map).
+export const SITE_ROOMS = {
+  villa: [["Aviator Room", "Games Room"], ["Trophy", "Statuary"], ["Kitchen", "Dining Room"], []],
+  coastline: [["Hookah", "Pool Table"], ["Penthouse", "TV"], ["Kitchen"], ["Blue Bar", "Sunrise"]],
+  clubhouse: [["Bedroom", "Gym"], ["Cash", "CCTV"], ["Bar", "Stock"], ["Church", "Armory"]],
+  consulate: [["Meeting", "CEO"], ["Piano", "Expo"], ["Tellers", "Servers"], ["Garage"]],
+  bank: [["CEO", "Exec"], ["Open Space"], ["Tellers Office", "Archives"], ["CCTV", "Lockers"]],
+  chalet: [["Master", "Office"], ["Bar", "Gaming"], ["Dining", "Kitchen"], ["Wine", "Garage"]],
+  kafe: [["Cocktail", "Cigar"], ["Reading", "Fireplace"], ["Fireplace", "Mining"], ["Service", "Cooking"]],
+  border: [["Armory", "Archives"], ["Workshop", "Ventilation"], ["Customs", "Supply"], ["Tellers", "Bathroom"]],
+  fortress: [["Commander", "Bathroom"], ["Dormitory", "Gaming"], ["Waiting", "Cafeteria"], ["Hammam", "Sitting"]],
+  nighthaven: [["Command", "Server"], ["Storage", "Control"], ["Kitchen", "Cafeteria"], ["Assembly", "Tank"]],
+  lair: [["Master", "Six"], ["Bunks", "Briefing"], ["Armory", "Maintenance"], ["Lab", "Support"]],
+  calypso: [["Cigar", "Pool"], ["Black Jack", "Poker"], ["Bar", "Betting"], ["CCTV", "Checkpoint"]],
+  oregon: [["Kids", "Dorm"], ["Kitchen", "Dining"], ["Meeting", "Kitchen"], ["Laundry", "Supply"]],
+  kanal: [["Server Room"], ["Security Room", "Maps Office"], ["Coast Guard Office", "Lounge"], ["Boat Supplies"]]
 };

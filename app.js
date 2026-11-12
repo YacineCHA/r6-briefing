@@ -1,4 +1,5 @@
-import { MAPS, ROLE, SWAPS, SQUAD_TIPS, SEASON } from "./data.js";
+import { MAPS, ROLE, SWAPS, SQUAD_TIPS, SEASON, SITE_ROOMS } from "./data.js";
+import { ROOMS } from "./rooms.js";
 import { FIREBASE_CONFIG } from "./firebase-config.js";
 
 const $ = (id) => document.getElementById(id);
@@ -9,7 +10,7 @@ const ls = {
 };
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const FLOORS = ["3F", "2F", "1F", "B"];
-const FLOOR_FR = { "3F": "2e étage", "2F": "1er étage", "1F": "Rez", "B": "Sous-sol" };
+const FLOOR_FR = { R: "toit", "3F": "2e étage", "2F": "1er étage", "1F": "Rez", "B": "Sous-sol" };
 const MAX = 5;
 
 // Une « soirée » va de 6 h à 6 h : la liste se vide d'elle-même le lendemain.
@@ -22,7 +23,7 @@ const cleanName = (s) => String(s || "").replace(/[\u0000-\u001f]/g, "").trim().
 
 const st = {
   side: ls.get("r6-side", "atk") === "def" ? "def" : "atk",
-  q: "", open: null, sel: {}, banned: {}, shift: 0,
+  q: "", open: null, sel: {}, banned: {}, shift: 0, floor: {}, mode: ls.get("r6-mode", "3d") === "plan" ? "plan" : "3d",
   roster: [], mine: ls.get("r6-mine", []), live: false
 };
 
@@ -154,7 +155,8 @@ function miniStack(m) {
 function visible() {
   const q = st.q.trim().toLowerCase();
   if (!q) return MAPS;
-  return MAPS.filter((m) => (m.name + " " + m.fr).toLowerCase().includes(q) || m.sites.some((s) => s.n.toLowerCase().includes(q)));
+  return MAPS.filter((m) => (m.name + " " + m.fr).toLowerCase().includes(q) || m.sites.some((s) => s.n.toLowerCase().includes(q)) ||
+    (ROOMS[m.id] && ROOMS[m.id].floors.some((f) => f.r.some((r) => (r[0] + " " + r[3]).toLowerCase().includes(q)))));
 }
 
 function renderGrid() {
@@ -163,7 +165,7 @@ function renderGrid() {
   $("grid").innerHTML = v.length ? v.map((m, i) => {
     const b = ourBans(m);
     return `<button class="card" data-map="${m.id}" style="--i:${i}" aria-label="Ouvrir ${esc(m.name)}">
-      <div class="card-head"><div><h2 class="card-name">${esc(m.name)}</h2><span class="card-fr">${esc(m.fr)} · ${m.sites.length} sites</span></div>${m.chk ? '<span class="tag">à vérifier</span>' : ""}</div>
+      <div class="card-head"><div><h2 class="card-name">${esc(m.name)}</h2><span class="card-fr">${esc(m.fr)} · ${m.sites.length} sites · ${ROOMS[m.id] ? ROOMS[m.id].floors.reduce((n, f) => n + f.r.length, 0) : 0} pièces</span></div>${m.chk ? '<span class="tag">à vérifier</span>' : ""}</div>
       <div class="card-body">${miniStack(m)}<div><div class="bl">${b.label}</div><div class="ops">${ops(b.list, b.cls, "ban")}</div></div></div>
     </button>`;
   }).join("") : '<p class="empty">Aucune map ne correspond.</p>';
@@ -229,23 +231,65 @@ function composition(m, s) {
   return { rows, tip: SQUAD_TIPS[tipN][st.side], n };
 }
 
+const FLOOR_ORDER = ["R", "3F", "2F", "1F", "B"];
+const FLOOR_LBL = { R: "Toit", "3F": "3F", "2F": "2F", "1F": "1F", B: "Sous-sol" };
+const planFloors = (m) => (ROOMS[m.id] ? ROOMS[m.id].floors : []).slice().sort((a, b) => FLOOR_ORDER.indexOf(a.f) - FLOOR_ORDER.indexOf(b.f));
+
+// Classe d'une pièce : « cur » si elle fait partie du site choisi, « obj » si c'est un autre site.
+function roomCls(m, sel, floor, name) {
+  const lists = SITE_ROOMS[m.id] || [];
+  const R = planFloors(m);
+  const onFloor = (k) => {
+    const sf = m.sites[k].f;
+    const there = R.find((f) => f.f === sf);
+    return floor === sf || !(there && there.r.some((r) => r[0] === name));
+  };
+  if ((lists[sel] || []).includes(name) && onFloor(sel)) return "cur";
+  if (lists.some((l, k) => k !== sel && l.includes(name) && onFloor(k))) return "obj";
+  return "";
+}
+
+function roomLabels(m, sel, fl, small) {
+  const nopos = ROOMS[m.id] && ROOMS[m.id].nopos;
+  if (nopos) return `<div class="nopos">${fl.r.map((r) => `<span class="chipr ${roomCls(m, sel, fl.f, r[0])}">${esc(r[0])}</span>`).join("")}</div>`;
+  return fl.r.map((r) => {
+    const c = roomCls(m, sel, fl.f, r[0]);
+    if (small && !c) return `<i class="dot" style="left:${r[1]}%;top:${r[2]}%"></i>`;
+    return `<span class="pl ${c}" style="left:${r[1]}%;top:${r[2]}%"${r[3] ? ` title="${esc(r[3])}"` : ""}>${esc(r[0])}</span>`;
+  }).join("");
+}
+
 function stack3d(m, sel) {
-  const fl = floorsOf(m);
-  const levels = fl.slice().reverse();
-  const selF = m.sites[sel].f;
-  return `<div class="stage" id="stage" aria-label="Schéma 3D des étages : glisse pour tourner">
-    <div class="rot" id="rot" style="--tx:${view.tx}deg;--tz:${view.tz}deg">
-      ${levels.map((f, l) => {
-        const idx = m.sites.map((s, k) => ({ s, k })).filter((o) => o.s.f === f);
-        return `<div class="slab ${f === "B" ? "b" : ""} ${f === selF ? "hot" : "dim"}" style="--l:${l}">
-          <div class="slab-floor"></div><div class="slab-edge"></div><span class="slab-label">${f}</span>
-          <div class="pads" style="--n:${idx.length}">${idx.map((o) =>
-            `<button class="pad" data-site="${o.k}" aria-pressed="${o.k === sel}" tabindex="-1">${esc(o.s.n.split(" / ")[0])}</button>`).join("")}</div>
-        </div>`;
-      }).join("")}
+  const s = m.sites[sel];
+  const fls = planFloors(m).filter((f) => f.f !== "R").reverse();
+  const hot = new Set([s.f, ...fls.filter((f) => f.r.some((r) => roomCls(m, sel, f.f, r[0]) === "cur")).map((f) => f.f)]);
+  const ar = fls.length ? fls[0].ar : 1;
+  const W = Math.round(Math.min(270, 270 * Math.sqrt(ar)));
+  const H = Math.round(W / ar);
+  return `<div class="stage" id="stage" aria-label="Schéma 3D des étages : glisse pour tourner, touche un étage pour l'ouvrir">
+    <div class="rot" id="rot" style="--tx:${view.tx}deg;--tz:${view.tz}deg;width:${W}px;height:${H}px;margin:${-H / 2}px 0 0 ${-W / 2}px">
+      ${fls.map((fl, l) => `<div class="slab ${fl.f === "B" ? "b" : ""} ${hot.has(fl.f) ? "hot" : "dim"}" style="--l:${l}" data-floor="${fl.f}">
+          <div class="slab-floor"></div><div class="slab-edge"></div><span class="slab-label">${fl.f}</span>
+          <div class="rooms">${roomLabels(m, sel, fl, true)}</div>
+        </div>`).join("")}
     </div>
-    <span class="stage-hint">Glisse pour tourner · touche un site</span>
+    <span class="stage-hint">Glisse pour tourner · touche un étage pour voir toutes ses pièces</span>
   </div>`;
+}
+
+function flatPlan(m, sel) {
+  const fls = planFloors(m);
+  const cur = fls.find((f) => f.f === st.floor[m.id]) || fls.find((f) => f.f === m.sites[sel].f) || fls[0];
+  if (!cur) return "";
+  const nopos = ROOMS[m.id].nopos;
+  const list = cur.r.slice().sort((a, b) => a[0].localeCompare(b[0]))
+    .map((r) => `<li class="${roomCls(m, sel, cur.f, r[0])}">${esc(r[0])}${r[3] ? `<small>${esc(r[3])}</small>` : ""}</li>`).join("");
+  return `<div class="floortabs" role="tablist" aria-label="Étages">${fls.map((f) =>
+      `<button role="tab" data-floor="${f.f}" aria-selected="${f.f === cur.f}">${FLOOR_LBL[f.f]}<small>${f.r.length}</small></button>`).join("")}</div>
+    ${nopos ? `<div class="planbox">${roomLabels(m, sel, cur, false)}</div>` :
+      `<div class="planscroll"><div class="plan" style="aspect-ratio:${cur.ar}">${roomLabels(m, sel, cur, false)}</div></div>`}
+    <div class="legend"><span class="lg cur">Site choisi</span><span class="lg obj">Autres sites</span><span class="lg">Pièce</span>${nopos ? "" : "<span>Positions d'après le plan officiel, glisse pour voir tout l'étage sur téléphone.</span>"}</div>
+    <details class="roomlist"><summary>Toutes les pièces du ${esc(FLOOR_LBL[cur.f])} (${cur.r.length})</summary><ul>${list}</ul></details>`;
 }
 
 function renderDialog() {
@@ -254,8 +298,9 @@ function renderDialog() {
   const c = composition(m, s);
   const sideLbl = st.side === "atk" ? "Attaque" : "Défense";
   const strat = st.side === "atk" ? m.atk : m.def;
-  const sitelist = floorsOf(m).flatMap((f) => m.sites.map((x, k) => ({ x, k })).filter((o) => o.x.f === f))
+  const sitelist = FLOOR_ORDER.flatMap((f) => m.sites.map((x, k) => ({ x, k })).filter((o) => o.x.f === f))
     .map((o) => `<button class="sitebtn" data-site="${o.k}" aria-pressed="${o.k === sel}"><b>${o.x.f}</b>${esc(o.x.n)}</button>`).join("");
+  const mode = st.mode;
   $("dlg-inner").innerHTML = `
     <div class="dlg-head">
       <div><h2 id="dlg-title">${esc(m.name)}</h2><span class="card-fr">${esc(m.fr)}</span></div>
@@ -270,21 +315,18 @@ function renderDialog() {
     <p class="blurb">${esc(m.blurb)}</p>
     ${m.chk ? `<p class="note"><b>À vérifier.</b> ${esc(m.chk)}</p>` : ""}
     <p class="links"><a href="https://www.ubisoft.com/fr-fr/game/rainbow-six/siege/game-info/maps/${m.ubi}" target="_blank" rel="noopener">Plans officiels (Ubisoft)</a><a href="https://r6calls.com" target="_blank" rel="noopener">Callouts (r6calls)</a></p>
-    <div class="dlg-grid">
-      <div>
-        ${stack3d(m, sel)}
-        <div class="sitelist" role="group" aria-label="Sites">${sitelist}</div>
-        <div class="box">
-          <h4>Bans · ${sideLbl}</h4>
-          <div class="bans2">
-            <div><div class="bl">${st.side === "atk" ? "On bannit (défenseur)" : "On bannit (attaquant)"}</div><div class="ops">${ops(st.side === "atk" ? m.bd : m.ba, st.side === "atk" ? "d" : "a", "ban")}</div></div>
-            <div><div class="bl">Eux risquent de bannir</div><div class="ops">${ops(st.side === "atk" ? m.ba : m.bd, st.side === "atk" ? "a" : "d")}</div></div>
-          </div>
-        </div>
+    <div class="sitelist" role="group" aria-label="Sites">${sitelist}</div>
+    <div class="viewbar">
+      <div class="seg mode" role="group" aria-label="Vue">
+        <button class="b" data-mode="3d" aria-pressed="${mode === "3d"}">Vue 3D</button>
+        <button class="b" data-mode="plan" aria-pressed="${mode === "plan"}">Plan par étage</button>
       </div>
+      <h3 class="sitename">${esc(s.n)}<small>${s.f} · ${FLOOR_FR[s.f]}</small></h3>
+    </div>
+    ${s.x ? `<p class="x">${esc(s.x)}</p>` : ""}
+    <div class="mapview">${mode === "3d" ? stack3d(m, sel) : flatPlan(m, sel)}</div>
+    <div class="dlg-grid">
       <div class="panel">
-        <h3>${esc(s.n)}<small>${s.f} · ${FLOOR_FR[s.f]}</small></h3>
-        ${s.x ? `<p class="x">${esc(s.x)}</p>` : ""}
         <div class="box side">
           <h4>Compo ${sideLbl.toLowerCase()} · ${c.n || "?"} joueur${c.n > 1 ? "s" : ""}</h4>
           <p class="tip">${esc(c.tip)}</p>
@@ -295,9 +337,18 @@ function renderDialog() {
             ${(st.banned[m.id] || []).length ? '<button class="btn ghost" id="unban">Annuler les bans</button>' : ""}
           </div>
         </div>
+      </div>
+      <div>
         <div class="box">
           <h4>Strat ${sideLbl.toLowerCase()}</h4>
           <ol class="strat">${strat.map((t) => `<li>${esc(t)}</li>`).join("")}</ol>
+        </div>
+        <div class="box">
+          <h4>Bans · ${sideLbl}</h4>
+          <div class="bans2">
+            <div><div class="bl">${st.side === "atk" ? "On bannit (défenseur)" : "On bannit (attaquant)"}</div><div class="ops">${ops(st.side === "atk" ? m.bd : m.ba, st.side === "atk" ? "d" : "a", "ban")}</div></div>
+            <div><div class="bl">Eux risquent de bannir</div><div class="ops">${ops(st.side === "atk" ? m.ba : m.bd, st.side === "atk" ? "a" : "d")}</div></div>
+          </div>
         </div>
       </div>
     </div>`;
@@ -310,8 +361,11 @@ $("dlg-inner").addEventListener("click", (e) => {
   const ds = e.target.closest("[data-dside]"); if (ds) return setSide(ds.dataset.dside);
   if (e.target.closest("#shuffle")) { st.shift++; return renderDialog(); }
   if (e.target.closest("#unban")) { st.banned[m.id] = []; return renderDialog(); }
+  const md = e.target.closest("[data-mode]"); if (md) { st.mode = md.dataset.mode; ls.set("r6-mode", st.mode); return renderDialog(); }
+  const fl = e.target.closest("[data-floor]");
+  if (fl && !dragged) { st.floor[m.id] = fl.dataset.floor; st.mode = "plan"; return renderDialog(); }
   const site = e.target.closest("[data-site]");
-  if (site && !dragged) { st.sel[m.id] = +site.dataset.site; return renderDialog(); }
+  if (site) { st.sel[m.id] = +site.dataset.site; st.floor[m.id] = m.sites[+site.dataset.site].f; return renderDialog(); }
   const b = e.target.closest("[data-ban]");
   if (b) {
     const list = st.banned[m.id] || [], o = b.dataset.ban;
