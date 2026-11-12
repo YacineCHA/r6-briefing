@@ -1,4 +1,4 @@
-import { MAPS, ROLE, SWAPS, SQUAD_TIPS, SEASON, SITE_ROOMS } from "./data.js";
+import { MAPS, ROLE, SWAPS, SQUAD_TIPS, SEASON, SITE_ROOMS, SITE_FR } from "./data.js";
 import { ROOMS } from "./rooms.js";
 import { STRATS, BAN_PLANS } from "./strats.js";
 import { FIREBASE_CONFIG } from "./firebase-config.js";
@@ -24,7 +24,7 @@ const cleanName = (s) => String(s || "").replace(/[\u0000-\u001f]/g, "").trim().
 
 const st = {
   side: ls.get("r6-side", "atk") === "def" ? "def" : "atk",
-  q: "", open: null, sel: {}, banned: {}, shift: 0, floor: {}, mode: ls.get("r6-mode", "3d") === "plan" ? "plan" : "3d",
+  lang: ls.get("r6-lang", "fr") === "en" ? "en" : "fr", q: "", open: null, sel: {}, banned: {}, shift: 0, floor: {}, mode: ls.get("r6-mode", "3d") === "plan" ? "plan" : "3d",
   roster: [], mine: ls.get("r6-mine", []), live: false
 };
 
@@ -157,6 +157,7 @@ function visible() {
   const q = st.q.trim().toLowerCase();
   if (!q) return MAPS;
   return MAPS.filter((m) => (m.name + " " + m.fr).toLowerCase().includes(q) || m.sites.some((s) => s.n.toLowerCase().includes(q)) ||
+    (SITE_FR[m.id] || []).some((n) => n.toLowerCase().includes(q)) ||
     (ROOMS[m.id] && ROOMS[m.id].floors.some((f) => f.r.some((r) => (r[0] + " " + r[3]).toLowerCase().includes(q)))));
 }
 
@@ -227,7 +228,7 @@ function composition(m, s, sel) {
     else { extra = true; who = `<span class="who">Random<small>à suggérer dans le chat</small></span>`; }
     const name = x.ban ? `<s>${esc(x.o)}</s> → ${esc(x.rep || "au choix")}` : esc(x.o);
     const role = ROLE[x.ban ? x.rep : x.o] || ROLE[x.o] || "";
-    const room = fc[i] && fc[i].room ? `<span class="room">→ ${esc(fc[i].room)}</span>` : "";
+    const room = fc[i] && fc[i].room ? `<span class="room">→ ${esc(rn(m, fc[i].room))}</span>` : "";
     return `<li class="${extra ? "extra" : ""}" style="--i:${i}">${who}<button class="opbtn ${x.ban ? "banned" : ""}" data-ban="${esc(x.o)}" title="Marquer comme banni par l'adversaire">${name}<small>${esc(role)}</small></button>${room}</li>`;
   }).join("");
   const tipN = Math.max(1, Math.min(n || MAX, MAX));
@@ -254,13 +255,33 @@ function roomCls(m, sel, floor, name) {
 
 function roomLabels(m, sel, fl, small) {
   const nopos = ROOMS[m.id] && ROOMS[m.id].nopos;
-  if (nopos) return `<div class="nopos">${fl.r.map((r) => `<span class="chipr ${roomCls(m, sel, fl.f, r[0])}">${esc(r[0])}</span>`).join("")}</div>`;
+  if (nopos) return `<div class="nopos">${fl.r.map((r) => `<span class="chipr ${roomCls(m, sel, fl.f, r[0])}" title="${esc(rnAlt(m, r[0]))}">${esc(rn(m, r[0]))}</span>`).join("")}</div>`;
   return fl.r.map((r) => {
     const c = roomCls(m, sel, fl.f, r[0]);
     if (small && !c) return `<i class="dot" style="left:${r[1]}%;top:${r[2]}%"></i>`;
-    return `<span class="pl ${c}" style="left:${r[1]}%;top:${r[2]}%"${r[3] ? ` title="${esc(r[3])}"` : ""}>${esc(r[0])}</span>`;
+    const alt = rnAlt(m, r[0]);
+    return `<span class="pl ${c}" style="left:${r[1]}%;top:${r[2]}%"${alt ? ` title="${esc(alt)}"` : ""}>${esc(rn(m, r[0]))}</span>`;
   }).join("");
 }
+
+/* ---------- Langue des noms de pièces ---------- */
+const FR = {};
+function frDict(m) {
+  if (!FR[m.id]) {
+    const d = {};
+    for (const f of (ROOMS[m.id] ? ROOMS[m.id].floors : [])) for (const r of f.r) if (r[3]) d[r[0]] = r[3];
+    // Noms trop courts ou trop génériques : on ne les remplace pas dans les phrases.
+    const skip = new Set(["Main", "Service", "Support", "Stage", "Split", "Default", "Solo", "Double", "Six", "Sun", "Pink", "Blue", "Bar", "Cash", "Train", "Exit", "Middle"]);
+    const keys = Object.keys(d).filter((k) => !skip.has(k) && k.length > 2).sort((a, b) => b.length - a.length);
+    const re = keys.length ? new RegExp("(^|[^A-Za-zÀ-ÿ])(" + keys.map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") + ")(?![A-Za-zÀ-ÿ])", "g") : null;
+    FR[m.id] = { d, re };
+  }
+  return FR[m.id];
+}
+const rn = (m, name) => (st.lang === "fr" && frDict(m).d[name]) || name;
+const rnAlt = (m, name) => (st.lang === "fr" ? name : (frDict(m).d[name] || ""));
+const tx = (m, text) => { if (st.lang !== "fr") return text; const { re, d } = frDict(m); return re ? text.replace(re, (all, pre, k) => pre + d[k]) : text; };
+const siteName = (m, k) => (st.lang === "fr" && SITE_FR[m.id] && SITE_FR[m.id][k]) || m.sites[k].n;
 
 /* ---------- Strats : positions des opérateurs et plans B ---------- */
 const stratOf = (m, sel) => (STRATS[m.id] || [])[sel] || null;
@@ -288,7 +309,7 @@ function markers(m, sel, floor, small) {
     const k = seen[x.room] = (seen[x.room] || 0) + 1;
     const ang = (k - 1) * 1.9, d = k === 1 ? 0 : (small ? 3.5 : 4);
     const left = r.x + Math.cos(ang) * d * 1.6, top = r.y + 5 + Math.sin(ang) * d;
-    return `<span class="mk ${st.side === "atk" ? "a" : "d"}${x.ban ? " sub" : ""}" style="left:${left.toFixed(1)}%;top:${top.toFixed(1)}%;--i:${i}" title="${esc(x.who)} : ${esc(x.room)}">${esc(small ? x.who.slice(0, 2) : x.who)}</span>`;
+    return `<span class="mk ${st.side === "atk" ? "a" : "d"}${x.ban ? " sub" : ""}" style="left:${left.toFixed(1)}%;top:${top.toFixed(1)}%;--i:${i}" title="${esc(x.who)} : ${esc(rn(m, x.room))}">${esc(small ? x.who.slice(0, 2) : x.who)}</span>`;
   }).join("");
 }
 function banPlans(m, sel) {
@@ -297,7 +318,7 @@ function banPlans(m, sel) {
   const likely = st.side === "atk" ? m.ba : m.bd;
   const fill = (o) => (BAN_PLANS[o] || "Sans {o} : {r} prend son rôle.").replace("{o}", o)
     .replace("{r}", (SWAPS[o] || []).filter((x) => !comp.includes(x)).slice(0, 2).join(" ou ") || "un autre opérateur du même rôle")
-    .replace("{w}", plan.w).replace("{e}", plan.e).replace("{alt}", plan.alt);
+    .replace("{w}", tx(m, plan.w)).replace("{e}", tx(m, plan.e)).replace("{alt}", tx(m, plan.alt));
   const ordered = [...comp.filter((o) => likely.includes(o) || banned.includes(o)), ...comp.filter((o) => !likely.includes(o) && !banned.includes(o))];
   return ordered.map((o) => `<li class="${banned.includes(o) ? "on" : likely.includes(o) ? "likely" : ""}"><b>${esc(o)}${likely.includes(o) ? " <em>souvent banni</em>" : ""}</b>${esc(fill(o))}</li>`).join("");
 }
@@ -334,8 +355,9 @@ function flatPlan(m, sel) {
   const cur = fls.find((f) => f.f === st.floor[m.id]) || fls.find((f) => f.f === m.sites[sel].f) || fls[0];
   if (!cur) return "";
   const nopos = ROOMS[m.id].nopos;
-  const list = cur.r.slice().sort((a, b) => a[0].localeCompare(b[0]))
-    .map((r) => `<li class="${roomCls(m, sel, cur.f, r[0])}">${esc(r[0])}${r[3] ? `<small>${esc(r[3])}</small>` : ""}</li>`).join("");
+  const list = cur.r.slice()
+    .map((r) => [rn(m, r[0]), rnAlt(m, r[0]), roomCls(m, sel, cur.f, r[0])]).sort((a, b) => a[0].localeCompare(b[0], "fr"))
+    .map(([a, b, c]) => `<li class="${c}">${esc(a)}${b && b !== a ? `<small>${esc(b)}</small>` : ""}</li>`).join("");
   return `<div class="floortabs" role="tablist" aria-label="Étages">${fls.map((f) =>
       `<button role="tab" data-floor="${f.f}" aria-selected="${f.f === cur.f}">${FLOOR_LBL[f.f]}<small>${f.r.length}</small></button>`).join("")}</div>
     <div class="planscroll"><div class="plan" style="aspect-ratio:${mapAr(m)};--ar:${mapAr(m)}">${bpImg(m, cur)}${nopos ? "" : roomLabels(m, sel, cur, false) + markers(m, sel, cur.f, false)}</div></div>
@@ -352,7 +374,7 @@ function renderDialog() {
   const sideLbl = st.side === "atk" ? "Attaque" : "Défense";
   const strat = st.side === "atk" ? m.atk : m.def;
   const sitelist = FLOOR_ORDER.flatMap((f) => m.sites.map((x, k) => ({ x, k })).filter((o) => o.x.f === f))
-    .map((o) => `<button class="sitebtn" data-site="${o.k}" aria-pressed="${o.k === sel}"><b>${o.x.f}</b>${esc(o.x.n)}</button>`).join("");
+    .map((o) => `<button class="sitebtn" data-site="${o.k}" aria-pressed="${o.k === sel}"><b>${o.x.f}</b>${esc(siteName(m, o.k))}</button>`).join("");
   const mode = st.mode;
   $("dlg-inner").innerHTML = `
     <div class="dlg-head">
@@ -374,7 +396,11 @@ function renderDialog() {
         <button class="b" data-mode="3d" aria-pressed="${mode === "3d"}">Vue 3D</button>
         <button class="b" data-mode="plan" aria-pressed="${mode === "plan"}">Plan par étage</button>
       </div>
-      <h3 class="sitename">${esc(s.n)}<small>${s.f} · ${FLOOR_FR[s.f]}</small></h3>
+      <div class="seg lang" role="group" aria-label="Langue des noms de pièces">
+        <button class="b" data-lang="fr" aria-pressed="${st.lang === "fr"}">FR</button>
+        <button class="b" data-lang="en" aria-pressed="${st.lang === "en"}" title="Callouts anglais, utilisés par beaucoup de joueurs">EN</button>
+      </div>
+      <h3 class="sitename">${esc(siteName(m, sel))}<small>${s.f} · ${FLOOR_FR[s.f]}</small></h3>
     </div>
     ${s.x ? `<p class="x">${esc(s.x)}</p>` : ""}
     <div class="mapview">${mode === "3d" ? stack3d(m, sel) : flatPlan(m, sel)}</div>
@@ -393,10 +419,10 @@ function renderDialog() {
       </div>
       <div>
         <div class="box">
-          <h4>Strat ${sideLbl.toLowerCase()} · ${esc(s.n)}</h4>
-          ${plan ? `<p class="key">${st.side === "atk" ? "Mur à ouvrir" : "Mur à tenir"} : <b>${esc(plan.w)}</b>. Approche de l'attaque : ${esc(plan.e)}.</p>
-          <ol class="strat">${(st.side === "atk" ? plan.as : plan.ds).map((t) => `<li>${esc(t)}</li>`).join("")}</ol>` : ""}
-          <details class="more"><summary>Conseils sur toute la map</summary><ul class="strat">${strat.map((t) => `<li>${esc(t)}</li>`).join("")}</ul></details>
+          <h4>Strat ${sideLbl.toLowerCase()} · ${esc(siteName(m, sel))}</h4>
+          ${plan ? `<p class="key">${st.side === "atk" ? "Mur à ouvrir" : "Mur à tenir"} : <b>${esc(tx(m, plan.w))}</b>. Approche de l'attaque : ${esc(tx(m, plan.e))}.</p>
+          <ol class="strat">${(st.side === "atk" ? plan.as : plan.ds).map((t) => `<li>${esc(tx(m, t))}</li>`).join("")}</ol>` : ""}
+          <details class="more"><summary>Conseils sur toute la map</summary><ul class="strat">${strat.map((t) => `<li>${esc(tx(m, t))}</li>`).join("")}</ul></details>
         </div>
         ${plan ? `<div class="box bans-b">
           <h4>Si l'adversaire banne un de nos opérateurs</h4>
@@ -423,6 +449,7 @@ $("dlg-inner").addEventListener("click", (e) => {
   const ds = e.target.closest("[data-dside]"); if (ds) return setSide(ds.dataset.dside);
   if (e.target.closest("#shuffle")) { st.shift++; return renderDialog(); }
   if (e.target.closest("#unban")) { st.banned[m.id] = []; return renderDialog(); }
+  const lg = e.target.closest("[data-lang]"); if (lg) { st.lang = lg.dataset.lang; ls.set("r6-lang", st.lang); return renderDialog(); }
   const md = e.target.closest("[data-mode]"); if (md) { st.mode = md.dataset.mode; ls.set("r6-mode", st.mode); return renderDialog(); }
   const fl = e.target.closest("[data-floor]");
   if (fl && !dragged) { st.floor[m.id] = fl.dataset.floor; st.mode = "plan"; return renderDialog(); }
