@@ -1,5 +1,6 @@
 import { MAPS, ROLE, SWAPS, SQUAD_TIPS, SEASON, SITE_ROOMS } from "./data.js";
 import { ROOMS } from "./rooms.js";
+import { STRATS, BAN_PLANS } from "./strats.js";
 import { FIREBASE_CONFIG } from "./firebase-config.js";
 
 const $ = (id) => document.getElementById(id);
@@ -212,7 +213,8 @@ function swapFor(op, comp, banned) {
   return (SWAPS[op] || []).find((o) => !comp.includes(o) && !banned.includes(o)) || null;
 }
 
-function composition(m, s) {
+function composition(m, s, sel) {
+  const fc = finalComp(m, sel);
   const comp = st.side === "atk" ? s.a : s.d;
   const banned = st.banned[m.id] || [];
   const final = comp.map((o) => banned.includes(o) ? { o, ban: true, rep: swapFor(o, comp, banned) } : { o });
@@ -225,7 +227,8 @@ function composition(m, s) {
     else { extra = true; who = `<span class="who">Random<small>à suggérer dans le chat</small></span>`; }
     const name = x.ban ? `<s>${esc(x.o)}</s> → ${esc(x.rep || "au choix")}` : esc(x.o);
     const role = ROLE[x.ban ? x.rep : x.o] || ROLE[x.o] || "";
-    return `<li class="${extra ? "extra" : ""}" style="--i:${i}">${who}<button class="opbtn ${x.ban ? "banned" : ""}" data-ban="${esc(x.o)}" title="Marquer comme banni par l'adversaire">${name}<small>${esc(role)}</small></button></li>`;
+    const room = fc[i] && fc[i].room ? `<span class="room">→ ${esc(fc[i].room)}</span>` : "";
+    return `<li class="${extra ? "extra" : ""}" style="--i:${i}">${who}<button class="opbtn ${x.ban ? "banned" : ""}" data-ban="${esc(x.o)}" title="Marquer comme banni par l'adversaire">${name}<small>${esc(role)}</small></button>${room}</li>`;
   }).join("");
   const tipN = Math.max(1, Math.min(n || MAX, MAX));
   return { rows, tip: SQUAD_TIPS[tipN][st.side], n };
@@ -259,18 +262,67 @@ function roomLabels(m, sel, fl, small) {
   }).join("");
 }
 
+/* ---------- Strats : positions des opérateurs et plans B ---------- */
+const stratOf = (m, sel) => (STRATS[m.id] || [])[sel] || null;
+function findRoom(m, name, pref) {
+  const fls = ROOMS[m.id] ? ROOMS[m.id].floors : [];
+  const order = [...fls.filter((f) => f.f === pref), ...fls.filter((f) => f.f !== pref)];
+  for (const f of order) { const r = f.r.find((x) => x[0] === name); if (r) return { f: f.f, x: r[1], y: r[2] }; }
+  return null;
+}
+// Compo finale (avec remplaçants des bannis) et pièce de départ de chacun.
+function finalComp(m, sel) {
+  const s = m.sites[sel], comp = st.side === "atk" ? s.a : s.d, banned = st.banned[m.id] || [];
+  const plan = stratOf(m, sel), rooms = plan ? (st.side === "atk" ? plan.A : plan.D) : [];
+  return comp.map((o, i) => {
+    const ban = banned.includes(o), rep = ban ? swapFor(o, comp, banned) : null;
+    return { o, ban, rep, who: ban ? (rep || "?") : o, room: rooms[i] || "" };
+  });
+}
+function markers(m, sel, floor, small) {
+  if (ROOMS[m.id].nopos) return "";
+  const s = m.sites[sel], seen = {};
+  return finalComp(m, sel).map((x, i) => {
+    const r = x.room && findRoom(m, x.room, s.f);
+    if (!r || r.f !== floor || r.x == null) return "";
+    const k = seen[x.room] = (seen[x.room] || 0) + 1;
+    const ang = (k - 1) * 1.9, d = k === 1 ? 0 : (small ? 3.5 : 4);
+    const left = r.x + Math.cos(ang) * d * 1.6, top = r.y + 5 + Math.sin(ang) * d;
+    return `<span class="mk ${st.side === "atk" ? "a" : "d"}${x.ban ? " sub" : ""}" style="left:${left.toFixed(1)}%;top:${top.toFixed(1)}%;--i:${i}" title="${esc(x.who)} : ${esc(x.room)}">${esc(small ? x.who.slice(0, 2) : x.who)}</span>`;
+  }).join("");
+}
+function banPlans(m, sel) {
+  const plan = stratOf(m, sel); if (!plan) return "";
+  const s = m.sites[sel], comp = st.side === "atk" ? s.a : s.d, banned = st.banned[m.id] || [];
+  const likely = st.side === "atk" ? m.ba : m.bd;
+  const fill = (o) => (BAN_PLANS[o] || "Sans {o} : {r} prend son rôle.").replace("{o}", o)
+    .replace("{r}", (SWAPS[o] || []).filter((x) => !comp.includes(x)).slice(0, 2).join(" ou ") || "un autre opérateur du même rôle")
+    .replace("{w}", plan.w).replace("{e}", plan.e).replace("{alt}", plan.alt);
+  const ordered = [...comp.filter((o) => likely.includes(o) || banned.includes(o)), ...comp.filter((o) => !likely.includes(o) && !banned.includes(o))];
+  return ordered.map((o) => `<li class="${banned.includes(o) ? "on" : likely.includes(o) ? "likely" : ""}"><b>${esc(o)}${likely.includes(o) ? " <em>souvent banni</em>" : ""}</b>${esc(fill(o))}</li>`).join("");
+}
+
+// Image du plan Ubisoft recadrée sur la zone utile (vb = x, y, largeur, hauteur dans l'image 1600x900).
+function bpImg(m, fl) {
+  const vb = ROOMS[m.id].vb;
+  if (!fl.img || !vb) return "";
+  const [x, y, w, h] = vb;
+  return `<img class="bp" src="${fl.img}" alt="" loading="lazy" draggable="false" style="width:${(1600 / w * 100).toFixed(2)}%;height:${(900 / h * 100).toFixed(2)}%;left:${(-x / w * 100).toFixed(2)}%;top:${(-y / h * 100).toFixed(2)}%">`;
+}
+const mapAr = (m) => { const vb = ROOMS[m.id] && ROOMS[m.id].vb; return vb ? vb[2] / vb[3] : 1.2; };
+
 function stack3d(m, sel) {
   const s = m.sites[sel];
   const fls = planFloors(m).filter((f) => f.f !== "R").reverse();
   const hot = new Set([s.f, ...fls.filter((f) => f.r.some((r) => roomCls(m, sel, f.f, r[0]) === "cur")).map((f) => f.f)]);
-  const ar = fls.length ? fls[0].ar : 1;
+  const ar = mapAr(m);
   const W = Math.round(Math.min(270, 270 * Math.sqrt(ar)));
   const H = Math.round(W / ar);
   return `<div class="stage" id="stage" aria-label="Schéma 3D des étages : glisse pour tourner, touche un étage pour l'ouvrir">
     <div class="rot" id="rot" style="--tx:${view.tx}deg;--tz:${view.tz}deg;width:${W}px;height:${H}px;margin:${-H / 2}px 0 0 ${-W / 2}px">
       ${fls.map((fl, l) => `<div class="slab ${fl.f === "B" ? "b" : ""} ${hot.has(fl.f) ? "hot" : "dim"}" style="--l:${l}" data-floor="${fl.f}">
-          <div class="slab-floor"></div><div class="slab-edge"></div><span class="slab-label">${fl.f}</span>
-          <div class="rooms">${roomLabels(m, sel, fl, true)}</div>
+          <div class="slab-floor">${bpImg(m, fl)}</div><div class="slab-edge"></div><span class="slab-label">${fl.f}</span>
+          <div class="rooms">${ROOMS[m.id].nopos ? "" : roomLabels(m, sel, fl, true) + markers(m, sel, fl.f, true)}</div>
         </div>`).join("")}
     </div>
     <span class="stage-hint">Glisse pour tourner · touche un étage pour voir toutes ses pièces</span>
@@ -286,16 +338,17 @@ function flatPlan(m, sel) {
     .map((r) => `<li class="${roomCls(m, sel, cur.f, r[0])}">${esc(r[0])}${r[3] ? `<small>${esc(r[3])}</small>` : ""}</li>`).join("");
   return `<div class="floortabs" role="tablist" aria-label="Étages">${fls.map((f) =>
       `<button role="tab" data-floor="${f.f}" aria-selected="${f.f === cur.f}">${FLOOR_LBL[f.f]}<small>${f.r.length}</small></button>`).join("")}</div>
-    ${nopos ? `<div class="planbox">${roomLabels(m, sel, cur, false)}</div>` :
-      `<div class="planscroll"><div class="plan" style="aspect-ratio:${cur.ar}">${roomLabels(m, sel, cur, false)}</div></div>`}
-    <div class="legend"><span class="lg cur">Site choisi</span><span class="lg obj">Autres sites</span><span class="lg">Pièce</span>${nopos ? "" : "<span>Positions d'après le plan officiel, glisse pour voir tout l'étage sur téléphone.</span>"}</div>
+    <div class="planscroll"><div class="plan" style="aspect-ratio:${mapAr(m)};--ar:${mapAr(m)}">${bpImg(m, cur)}${nopos ? "" : roomLabels(m, sel, cur, false) + markers(m, sel, cur.f, false)}</div></div>
+    ${nopos && cur.r.length ? `<div class="planbox"><p class="helper">Pas de positions à jour pour cette map : voici les pièces de l'étage.</p>${roomLabels(m, sel, cur, false)}</div>` : ""}
+    <div class="legend"><span class="lg cur">Site choisi</span><span class="lg obj">Autres sites</span><span class="lg">Pièce</span>${nopos ? "" : "<span>Plans officiels Ubisoft. Sur téléphone, glisse le plan pour voir tout l'étage.</span>"}</div>
     <details class="roomlist"><summary>Toutes les pièces du ${esc(FLOOR_LBL[cur.f])} (${cur.r.length})</summary><ul>${list}</ul></details>`;
 }
 
 function renderDialog() {
   const m = MAPS.find((x) => x.id === st.open); if (!m) return;
   const sel = st.sel[m.id] || 0, s = m.sites[sel];
-  const c = composition(m, s);
+  const c = composition(m, s, sel);
+  const plan = stratOf(m, sel);
   const sideLbl = st.side === "atk" ? "Attaque" : "Défense";
   const strat = st.side === "atk" ? m.atk : m.def;
   const sitelist = FLOOR_ORDER.flatMap((f) => m.sites.map((x, k) => ({ x, k })).filter((o) => o.x.f === f))
@@ -340,9 +393,15 @@ function renderDialog() {
       </div>
       <div>
         <div class="box">
-          <h4>Strat ${sideLbl.toLowerCase()}</h4>
-          <ol class="strat">${strat.map((t) => `<li>${esc(t)}</li>`).join("")}</ol>
+          <h4>Strat ${sideLbl.toLowerCase()} · ${esc(s.n)}</h4>
+          ${plan ? `<p class="key">${st.side === "atk" ? "Mur à ouvrir" : "Mur à tenir"} : <b>${esc(plan.w)}</b>. Approche de l'attaque : ${esc(plan.e)}.</p>
+          <ol class="strat">${(st.side === "atk" ? plan.as : plan.ds).map((t) => `<li>${esc(t)}</li>`).join("")}</ol>` : ""}
+          <details class="more"><summary>Conseils sur toute la map</summary><ul class="strat">${strat.map((t) => `<li>${esc(t)}</li>`).join("")}</ul></details>
         </div>
+        ${plan ? `<div class="box bans-b">
+          <h4>Si l'adversaire banne un de nos opérateurs</h4>
+          <ul class="banplans">${banPlans(m, sel)}</ul>
+        </div>` : ""}
         <div class="box">
           <h4>Bans · ${sideLbl}</h4>
           <div class="bans2">
@@ -353,6 +412,9 @@ function renderDialog() {
       </div>
     </div>`;
   bindStage();
+  // Sur petit écran, centre le plan sur le site choisi.
+  const sc = document.querySelector(".planscroll"), hot = sc && sc.querySelector(".pl.cur");
+  if (sc && hot && sc.scrollWidth > sc.clientWidth) sc.scrollLeft = hot.offsetLeft - sc.clientWidth / 2;
 }
 
 $("dlg-inner").addEventListener("click", (e) => {

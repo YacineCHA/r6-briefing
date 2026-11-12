@@ -137,7 +137,7 @@ dialog[open]{animation:zoom .3s cubic-bezier(.2,.8,.2,1) both}
   background:linear-gradient(135deg,rgba(255,255,255,.05),rgba(255,255,255,.01)),repeating-linear-gradient(0deg,var(--grid) 0 1px,transparent 1px 20px),repeating-linear-gradient(90deg,var(--grid) 0 1px,transparent 1px 20px),var(--surface);
   box-shadow:0 0 0 1px rgba(0,0,0,.3)}
 .slab.b .slab-floor{border-style:dashed}
-.slab.dim .slab-floor{opacity:.55}
+
 .slab.hot .slab-floor{border-color:var(--side);box-shadow:0 0 40px -6px var(--side)}
 .slab-edge{position:absolute;left:0;right:0;bottom:-10px;height:10px;transform-origin:top;transform:rotateX(-90deg);background:var(--line);border-radius:0 0 3px 3px}
 .slab.hot .slab-edge{background:var(--side)}
@@ -248,3 +248,35 @@ footer a{color:var(--side)}
   .bans2{grid-template-columns:1fr}
 }
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* Plans Ubisoft en fond */
+.bp{position:absolute;max-width:none;pointer-events:none;user-select:none}
+.slab-floor{overflow:hidden}
+.slab-floor .bp{opacity:.9}
+.slab.dim .slab-floor .bp{opacity:.45;filter:saturate(.6)}
+.slab.dim .slab-floor{opacity:1}
+.plan{overflow:hidden;max-height:none;min-width:640px;width:min(100%, calc(76vh * var(--ar, 1.2)))}
+.plan .bp{opacity:.95}
+.plan .pl{background:rgba(11,20,26,.78);font-size:11px;padding:2px 5px}
+.planbox{margin-top:10px}
+.planbox .helper{margin:0 0 10px}
+
+/* Marqueurs d'opérateurs sur le plan */
+.mk{position:absolute;transform:translate(-50%,-50%);z-index:3;font:700 11px/1 var(--f-body);padding:4px 7px;border-radius:999px;white-space:nowrap;
+  color:#0B141A;border:2px solid #0B141A;box-shadow:0 2px 8px rgba(0,0,0,.6);animation:pop .35s ease both;animation-delay:calc(var(--i,0)*60ms)}
+.mk.a{background:var(--atk)} .mk.d{background:var(--def)}
+.mk.sub{outline:2px dashed var(--warn);outline-offset:1px}
+.rooms .mk{font-size:8px;padding:2px 4px;border-width:1px}
+.assign li{grid-template-columns:minmax(0,1fr) auto}
+.assign .room{grid-column:1/-1;font:500 11px var(--f-mono);color:var(--muted);margin-top:-2px}
+.key{font-size:14px;margin:0 0 10px;color:var(--muted)}
+.key b{color:var(--ink)}
+.more{margin-top:10px}
+.more summary{cursor:pointer;font-size:13px;color:var(--muted)}
+.more .strat{margin-top:8px;list-style:disc}
+.banplans{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.banplans li{font-size:13.5px;padding:8px 10px;border-radius:6px;background:var(--bg2);border:1px solid var(--line)}
+.banplans li b{display:block;font-size:14px;margin-bottom:2px}
+.banplans li em{font-style:normal;font:500 10px var(--f-mono);color:var(--warn);background:var(--warn-bg);padding:2px 5px;border-radius:2px;margin-left:6px;text-transform:uppercase;letter-spacing:.05em}
+.banplans li.likely{border-color:color-mix(in srgb,var(--warn) 50%,var(--line))}
+.banplans li.on{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 10%,var(--bg2))}

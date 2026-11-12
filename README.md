@@ -52,9 +52,16 @@ Les compos sont classées par priorité : avec 3 joueurs, le site donne les 3 pr
 
 Dans `data.js`, `SITE_ROOMS` indique quelles pièces forment chaque site (elles s'allument sur le plan).
 
+## Plans et strats
+
+- `plans/` : les plans officiels Ubisoft, un fichier par étage (`<map>-<étage>.jpg`, étages `b`, `1f`, `2f`, `3f`, `r` pour le toit). Les noms des pièces sont placés dessus grâce aux positions SiteRep, qui sont calées sur ces mêmes plans (1600 × 900). Les fichiers `unused-*` et `outback-*` ne servent pas.
+- `strats.js` : pour chaque site, en attaque et en défense, la pièce de départ de chaque opérateur (affichée sur le plan), 3 étapes, le mur clé et les plans B quand l'adversaire banne un de nos opérateurs.
+
 ## Fichiers
 
 - `index.html`, `style.css`, `app.js` : le site
 - `data.js` : le contenu (bans, compos, strats)
 - `rooms.js` : les pièces de chaque étage
+- `strats.js` : les strats et plans B
+- `plans/` : les plans Ubisoft
 - `firebase-config.js` : la connexion à la base (facultatif)
